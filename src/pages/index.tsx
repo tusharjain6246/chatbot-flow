@@ -1,118 +1,164 @@
-import Image from "next/image";
-import { Inter } from "next/font/google";
+import "reactflow/dist/style.css";
 
-const inter = Inter({ subsets: ["latin"] });
+import { DragEvent, useRef, useState } from "react";
+import ReactFlow, {
+  addEdge,
+  Connection,
+  Edge,
+  Node,
+  ReactFlowInstance,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+} from "reactflow";
 
-export default function Home() {
+import EditPanel from "@/components/EditPanel";
+import NodePanel from "@/components/NodePanel";
+import { Result } from "@/models/Bot";
+import { MessageProps } from "@/models/Bot";
+import { createUUID, isAllSourceNodeConnected } from "@/utils/common";
+import { EVENT_TYPE, connectionLineStyle, nodeTypes } from "@/constants/common";
+
+const Home = () => {
+  const reactFlowRef = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [selectedNode, setSelectedNode] = useState<Node<MessageProps>>();
+  const [result, setResult] = useState<Result>();
+  const [reactFlowInstance, setReactFlowInstance] =
+    useState<ReactFlowInstance | null>(null);
+
+  const handleConnect = (params: Connection | Edge) => {
+    setEdges((prev) => addEdge(params, prev));
+  };
+
+  const resetSaveResult = () => {
+    setResult(undefined);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const type = event.dataTransfer.getData(EVENT_TYPE.ReactFlow);
+    if (reactFlowInstance && type && reactFlowRef && reactFlowRef.current) {
+      const reactFlowBounds = reactFlowRef.current.getBoundingClientRect();
+      const x = event.clientX - reactFlowBounds.left;
+      const y = event.clientY - reactFlowBounds.top;
+      const position = reactFlowInstance.screenToFlowPosition({
+        x,
+        y,
+      });
+      const id = createUUID();
+      const newNode: Node = {
+        id,
+        type,
+        position,
+        data: { text: "Type Your message here" },
+      };
+      setNodes((prev) => prev.concat(newNode));
+      resetSaveResult();
+    }
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    resetSaveResult();
+  };
+
+  const handleNodeClick = (node: Node<MessageProps>) => {
+    setSelectedNode(node);
+    resetSaveResult();
+  };
+
+  const handleSubmitEditText = (text: string) => {
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id !== selectedNode?.id) {
+          return node;
+        }
+        return {
+          ...node,
+          data: { text },
+        };
+      })
+    );
+    resetSaveResult();
+  };
+
+  const handleResetSelectedNode = () => {
+    setSelectedNode(undefined);
+    resetSaveResult();
+  };
+
+  const handleDeleteNode = () => {
+    setNodes((prev) => prev.filter((node) => node.id !== selectedNode?.id));
+    resetSaveResult();
+  };
+
+  const handleSave = () => {
+    if (isAllSourceNodeConnected(nodes, edges)) {
+      setResult({ text: "Successfully saved Flow", type: "success" });
+    } else {
+      setResult({ text: "Cannot Save Flow", type: "error" });
+    }
+  };
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/pages/index.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <>
+      <div className="w-full p-4 bg-[#E3E3E3] flex items-center justify-center pr-20 relative min-h-[75px] relative">
+        {result ? (
+          <p
+            className={`border border-solid p-2 rounded-md ${
+              result.type === "success"
+                ? "bg-[#CEF2AA] border-[#80D12E]"
+                : "bg-[#FFE5E8] border-[#D91625]"
+            }`}
           >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+            {result.text}
+          </p>
+        ) : null}
+        <button
+          className="bg-white border border-solid border-[#3674B2] rounded-xl p-2 min-w-[150px] ml-8 absolute right-20"
+          onClick={handleSave}
+        >
+          Save
+        </button>
+      </div>
+      <div className="flex h-screen grow flex-col md:flex-row">
+        <ReactFlowProvider>
+          <div ref={reactFlowRef} className="h-screen w-full">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={handleConnect}
+              onInit={setReactFlowInstance}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              fitView
+              nodeTypes={nodeTypes}
+              onNodeClick={(_, node) => handleNodeClick(node)}
+              onPaneClick={handleResetSelectedNode}
+              connectionLineStyle={connectionLineStyle}
+              attributionPosition="bottom-left"
             />
-          </a>
-        </div>
+          </div>
+          {selectedNode ? (
+            <EditPanel
+              key={selectedNode.data.text}
+              currentValue={selectedNode.data.text}
+              onSubmit={handleSubmitEditText}
+              onBackClick={handleResetSelectedNode}
+              onDeleteClick={handleDeleteNode}
+            />
+          ) : (
+            <NodePanel />
+          )}
+        </ReactFlowProvider>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+    </>
   );
-}
+};
+
+export default Home;
