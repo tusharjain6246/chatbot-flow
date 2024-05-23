@@ -16,7 +16,11 @@ import EditPanel from "@/components/EditPanel";
 import NodePanel from "@/components/NodePanel";
 import { Result } from "@/models/Bot";
 import { MessageProps } from "@/models/Bot";
-import { createUUID, isAllSourceNodeConnected } from "@/utils/common";
+import {
+  createUUID,
+  isAllSourceNodeConnected,
+  isNodeAlreadyConnected,
+} from "@/utils/common";
 import { EVENT_TYPE, connectionLineStyle, nodeTypes } from "@/constants/common";
 
 const Home = () => {
@@ -29,7 +33,12 @@ const Home = () => {
     useState<ReactFlowInstance | null>(null);
 
   const handleConnect = (params: Connection | Edge) => {
-    setEdges((prev) => addEdge(params, prev));
+    resetSaveResult();
+    if (!isNodeAlreadyConnected(edges, params)) {
+      setEdges((prev) => addEdge(params, prev));
+    } else {
+      setResult({ text: "Source node already Connected", type: "error" });
+    }
   };
 
   const resetSaveResult = () => {

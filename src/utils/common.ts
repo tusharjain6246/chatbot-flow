@@ -1,4 +1,4 @@
-import { Edge, Node } from "reactflow";
+import { Edge, Node, Connection } from "reactflow";
 import { MessageProps } from "@/models/Bot";
 
 export const createUUID = () => {
@@ -8,6 +8,14 @@ export const createUUID = () => {
       (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (Number(c) / 4)))
     ).toString(16)
   );
+};
+
+export const isNodeAlreadyConnected = (
+  edges: Edge<MessageProps>[],
+  params: Connection | Edge
+) => {
+  const edgeIds = edges.map((edge) => edge.source);
+  return params.source && edgeIds.includes(params.source);
 };
 
 export const isAllSourceNodeConnected = (
